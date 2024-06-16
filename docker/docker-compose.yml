@@ -1,0 +1,96 @@
+services:
+  mysql:
+    image: mysql:8.0.33
+    container_name: carsharing-mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=1234
+      #      MYSQL_USER:
+      #      MYSQL_PASSWORD:
+      - TZ=Asia/Seoul
+    command: # 명령어 실행
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - ./mysql/init:/docker-entrypoint-initdb.d
+
+  kafka:
+    image: bitnami/kafka:3.7.0
+    restart: always
+    container_name: carsharing-kafka
+    ports:
+      - "9092:9094"
+    environment:
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      # KRaft settings
+      - KAFKA_CFG_BROKER_ID=0
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_KRAFT_CLUSTER_ID=HsDBs9l6UUmQq7Y5E6bNlw
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      # Listeners
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+  #    volumes:
+  #      - "./kafka:/bitnami/kafka"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    restart: unless-stopped
+    container_name: carsharing-kafka-ui
+    ports:
+      - "9090:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=Local-Kraft-Cluster
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - DYNAMIC_CONFIG_ENABLED=true
+      - KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED=true
+      - KAFKA_CLUSTERS_0_AUDIT_CONSOLEAUDITENABLED=true
+
+  redis:
+    image: redis:6.2.14-alpine
+    restart: always
+    container_name: carsharing-redis
+    ports:
+      - "6379:6379"
+    # volumes:
+    # - ./redis/data:/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.1.3
+    container_name: carsharing-elasticsearch
+    # volumes:
+    # - ./es/data:/usr/share/elasticsearch/data
+    # - ./es/conf/elasticsearch.yml:/user/share/elasticsearch/config/elasticsearch.yml
+    environment:
+      - node.name=single
+      - discovery.seed_hosts=es
+      - cluster.name=standalone
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.1.3
+    container_name: carsharing-kibana
+    environment:
+      ELASTICSEARCH_HOSTS: '["http://host.docker.internal:9200"]'
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
